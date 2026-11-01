@@ -1,4 +1,6 @@
 # mod-epic-bosses (AzerothCore 3.3.5a)
+<img width="1024" height="506" alt="Banner" src="https://github.com/user-attachments/assets/0f1f4324-d777-44f3-b922-1fec5a327549" />
+
 
 **`mod-epic-bosses`** is a C++ module for **AzerothCore 3.3.5a (Wrath of the Lich King)** designed to enhance immersion and "Game Feel" during boss encounters.
 
