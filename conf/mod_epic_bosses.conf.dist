@@ -102,3 +102,132 @@ EpicBosses.Spells = ""
 # EmoteID        : Animation played when resetting aggro (e.g., 15 = Roar, 0 = None).
 #--------------------------------------------------------------------------------------------------
 EpicBosses.AggroReset = ""
+
+# ==============================================================================
+# 9. VANILLA BOSS IMMUNITIES (TBC / WOTLK STANDARDIZATION)
+# ==============================================================================
+# Master switch for the Vanilla boss immunity system.
+# Upgrades Vanilla bosses (Expansion 0 Dungeon Bosses, Raid Bosses, World Bosses,
+# Rare Elites, and ForceBossCreatures) to match TBC / WotLK boss immunity standards.
+EpicBosses.Immunities.Enable = 1
+
+# 1. Stun Immunity (Hammer of Justice, Cheap Shot, Kidney Shot, Deep Freeze, etc.)
+EpicBosses.Immunities.Vanilla.Stun = 1
+
+# 2. Silence & Interrupt / Decast Immunity (Kick, Counterspell, Pummel, Mind Freeze, Silence, etc.)
+EpicBosses.Immunities.Vanilla.SilenceInterrupt = 1
+
+# 3. Hard Crowd Control Immunity (Polymorph, Hex, Fear, Charm/Mind Control, Sleep,
+#    Banish, Cyclone, Shackle Undead, Turn Evil, Sap, Gouge, Repentance, Blind, Horror, Freeze)
+EpicBosses.Immunities.Vanilla.CrowdControl = 1
+
+# 4. Movement & Anti-Kiting Immunity (Frost Nova, Entangling Roots, Movement Speed Slows/Snares,
+#    Death Grip, and Knockbacks like Typhoon/Thunderstorm).
+#    Note: Melee attack speed slows (Thunder Clap, Icy Touch, Infected Wounds) are NOT blocked.
+EpicBosses.Immunities.Vanilla.Movement = 1
+
+# 5. Disarm Immunity (Warrior Disarm, Rogue Dismantle, Priest Psychic Horror Disarm, Chimera Scorpid)
+EpicBosses.Immunities.Vanilla.Disarm = 1
+
+# Additional Creature Entry IDs that should be treated as Bosses for immunity purposes
+# (e.g., untagged optional dungeon bosses & mini-bosses).
+# Format: "EntryID1,EntryID2,EntryID3"
+EpicBosses.Immunities.ForceBossCreatures = "7023,7274,7359,7603,7604,7605,7606,7607,7608,7797,13233,13596,9025,9026,9031,9041,9042,9056,9033,11143,17307,17536"
+
+# ------------------------------------------------------------------------------
+# A. EXCLUDED FROM ALL MODULE IMMUNITIES
+# ------------------------------------------------------------------------------
+# Bosses and encounters designed around full CC/Stun/Interrupt vulnerability:
+# - 15543: Princess Yauj (AQ40 - Bug Trio: Great Heal must be stunned, feared, or kicked)
+# - 3673:  Lord Serpentis (Wailing Caverns - Healing Touch & Slumber)
+# - 3669:  Lord Cobrahn (Wailing Caverns - Healing Touch & Slumber)
+# - 3670:  Lord Pythas (Wailing Caverns - Healing Touch & Slumber)
+# - 3671:  Lady Anacondra (Wailing Caverns - Healing Touch & Slumber)
+EpicBosses.Immunities.ExcludedCreatures = "15543,3673,3669,3670,3671"
+
+# ------------------------------------------------------------------------------
+# B. EXCLUDED FROM STUN IMMUNITY ONLY
+# ------------------------------------------------------------------------------
+# Bosses that must remain stunnable for specific encounter mechanics:
+# - 10440: Baron Rivendare (Stratholme - Stunned during skeleton phase / Cleave)
+# - 1853:  Darkmaster Gandling (Scholomance - Stunnable to prevent room teleports)
+EpicBosses.Immunities.ExcludedStunCreatures = "10440,1853"
+
+# ------------------------------------------------------------------------------
+# C. EXCLUDED FROM SILENCE / INTERRUPT (DECAST) IMMUNITY ONLY
+# ------------------------------------------------------------------------------
+# Bosses where kicking heals, mind controls, or lethal casts is required by the strategy:
+#
+# [Vanilla Raids - Naxxramas, AQ40, AQ20, ZG, BWL, MC]
+# - 15990: Kel'Thuzad (Naxxramas - Phase 2 single-target Frostbolt)
+# - 15953: Grand Widow Faerlina (Naxxramas - Poison Bolt Volley)
+# - 15954: Noth the Plaguebringer (Naxxramas - Curse of the Plaguebringer)
+# - 16065: Lady Blaumeux (Naxxramas - Four Horsemen Shadow Bolt)
+# - 16064: Thane Korth'azz (Naxxramas - Four Horsemen)
+# - 16062: Highlord Mograine (Naxxramas - Four Horsemen)
+# - 16063: Sir Zeliek (Naxxramas - Four Horsemen Holy Bolt)
+# - 15263: The Prophet Skeram (AQ40 - Arcane Explosion & True Fulfillment)
+# - 15516: Battleguard Sartura (AQ40 - Vulnerable to interrupts outside Whirlwind)
+# - 15341: General Rajaxx (AQ20 - Thundercrash / High-damage casts)
+# - 15340: Moam (AQ20 - Arcane Eradication)
+# - 14517: High Priestess Jeklik (Zul'Gurub - Great Heal & Mind Flay)
+# - 14507: High Priest Venoxis (Zul'Gurub - Renew & Holy Wrath)
+# - 14510: High Priestess Mar'li (Zul'Gurub - Drain Life & Poison Volley)
+# - 11380: Jin'do the Hexxer (Zul'Gurub - Hex & Brain Wash Totem casts)
+# - 12018: Majordomo Executus (Molten Core - Teleport & Aegis)
+# - 11988: Gehennas (Molten Core - Shadow Bolt / Rain of Fire)
+# - 12118: Lucifron (Molten Core - Impending Doom / Lucifron's Curse)
+#
+# [Vanilla Dungeons - BRD, LBRS, UBRS, Strat, Scholo, Dire Maul, SM, etc.]
+# - 3977:  High Inquisitor Whitemane (Scarlet Monastery - Scarlet Resurrection & Heal)
+# - 3976:  Scarlet Commander Mograine (Scarlet Monastery - Crusader Heal)
+# - 6487:  Arcanist Doan (Scarlet Monastery - Detonation / Silence)
+# - 4543:  Bloodmage Thalnos (Scarlet Monastery - Flame Spike / Shadow Bolt)
+# - 8929:  Princess Moira Bronzebeard (BRD - Heal & Renew during Thaurissan fight)
+# - 9019:  Emperor Dagran Thaurissan (BRD - Hand of Thaurissan)
+# - 9017:  Lord Incendius (BRD - Fire Storm)
+# - 9056:  Fineous Darkvire (BRD - Holy Light & Devotion)
+# - 10811: Archivist Galford (Stratholme - Burning Winds & Pyroblast)
+# - 10997: Cannon Master Willey (Stratholme - Summon Crimson Rifleman)
+# - 10438: Maleki the Pallid (Stratholme - Frostbolt & Drain Life)
+# - 10508: Ras Frostwhisper (Scholomance - Frostbolt Volley & Fear)
+# - 10503: Jandice Barov (Scholomance - Curse of Blood)
+# - 10506: Kirtonos the Herald (Scholomance - Shadow Bolt Volley)
+# - 11486: Prince Tortheldrin (Dire Maul - Counterspell / Arcane Bolt)
+# - 11489: Tendris Warpwood (Dire Maul - Entangle)
+# - 11492: Alzzin the Wildshaper (Dire Maul - Wild Regeneration & Enervate)
+# - 9236:  Shadow Hunter Vosh'gajin (LBRS - Hex & Curse of Blood)
+# - 9736:  Quartermaster Zigris (LBRS - Drink Healing Potion)
+# - 7358:  Amnennar the Coldbringer (Razorfen Downs - Frostbolt & Summons)
+# - 7271:  Witch Doctor Zum'rah (Zul'Farrak - Healing Wave & Shadow Bolt Volley)
+# - 7272:  Theka the Martyr (Zul'Farrak - Fevered Plague)
+# - 5721:  Dreamscythe (Sunken Temple - Acid Breath)
+# - 5710:  Jammal'an the Prophet (Sunken Temple - Healing Wave & Hex of Jammal'an)
+# - 4275:  Archmage Arugal (Shadowfang Keep - Void Bolt)
+EpicBosses.Immunities.ExcludedSilenceInterruptCreatures = "15990,15953,15954,16065,16064,16062,16063,15263,15516,15341,15340,14517,14507,14510,11380,12018,11988,12118,3977,3976,6487,4543,8929,9019,9017,9056,10811,10997,10438,10508,10503,10506,11486,11489,11492,9236,9736,7358,7271,7272,5721,5710,4275"
+
+# ------------------------------------------------------------------------------
+# D. EXCLUDED FROM HARD CROWD CONTROL IMMUNITY ONLY
+# ------------------------------------------------------------------------------
+# Bosses or mini-bosses that must remain vulnerable to specific CC (e.g., Banish/Fear/Sheep):
+EpicBosses.Immunities.ExcludedCrowdControlCreatures = ""
+
+# ------------------------------------------------------------------------------
+# E. EXCLUDED FROM MOVEMENT (ROOT / SNARE) IMMUNITY ONLY
+# ------------------------------------------------------------------------------
+# Bosses where kiting or slowing movement is an intended part of the encounter:
+# - 15932: Gluth (Naxxramas - Kiting / Decimate phase positioning)
+# - 11583: Razorgore the Untamed (BWL - Kiting / Conflagration positioning)
+EpicBosses.Immunities.ExcludedMovementCreatures = "15932,11583"
+
+# ------------------------------------------------------------------------------
+# F. EXCLUDED FROM DISARM IMMUNITY ONLY
+# ------------------------------------------------------------------------------
+# Bosses designed to be disarmed as a counter-mechanic to their physical burst:
+# - 3975:  Herod (Scarlet Monastery - Disarming stops or mitigates Whirlwind)
+# - 9568:  Overlord Wyrmthalak (LBRS - Classic Disarm target)
+# - 12017: Broodlord Lashlayer (BWL - Vulnerable to Disarm to mitigate Mortal Strike)
+# - 10429: Warchief Rend Blackhand (UBRS - Vulnerable to Disarm)
+# - 9583:  General Drakkisath (UBRS - Conflagration tank swap / Disarm)
+# - 10808: Timmy the Cruel (Stratholme - Enrage / Thrash counter-play)
+EpicBosses.Immunities.ExcludedDisarmCreatures = "3975,9568,12017,10429,9583,10808"
