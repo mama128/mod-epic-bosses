@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2016-2026 AzerothCore <http://www.azerothcore.org/>
+ * Licensed under the AGPL v3 license.
+ */
+
 #ifndef EPIC_BOSSES_HPP
 #define EPIC_BOSSES_HPP
 
@@ -54,6 +59,7 @@ public:
     Epic_Bosses_CreatureScript() : AllCreatureScript("Epic_Bosses_CreatureScript") { }
 
     void OnCreatureAddWorld(Creature* creature) override;
+    void OnCreatureRemoveWorld(Creature* creature) override;
 };
 
 class Epic_Bosses_UnitScript : public UnitScript
