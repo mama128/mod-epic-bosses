@@ -60,7 +60,7 @@ Allows you to customize enemy combat strategies by assigning **multiple active s
 | **CreatureID** | Creature Entry ID | e.g., `11520` (Taragaman) |
 | **SpellID** | Spell ID from `Spell.dbc` | e.g., `27577` (Charge), `8599` (Enrage), `16727` (War Stomp) |
 | **IntervalMs** | Cooldown timer in milliseconds | e.g., `12000` (every 12s), or `0` for a **one-time phase cast** |
-| **HealthPct** | HP% threshold to start casting | `100.0` (entire fight), `30.0` (only when HP $\le 30\%$) |
+| **HealthPct** | HP% threshold to start casting | `100.0` (entire fight), `30.0` (only when HP% is 30%) |
 | **TargetType** | Target selection logic | `0` = Current Victim (Tank), `1` = Self, `2` = Random Alive Player (40 yds) |
 | **EmoteID** | Forced physical body animation | `0` = Native spell anim, `15` = Roar, `18` = 2H Slam, `53` = Directed Cast, `54` = Omni Cast |
 | **Triggered** | Cast behavior | `0` = Normal cast (uses cast bar), `1` = Instant cast (great when paired with `EmoteID`) |
@@ -73,7 +73,7 @@ Wipes the boss's threat table (`ResetAllThreat()`) on a repeating timer or as a 
 | :--- | :--- | :--- |
 | **CreatureID** | Creature Entry ID | e.g., `11520` |
 | **IntervalMs** | Cooldown timer in milliseconds | e.g., `20000` (every 20s), or `0` for a **one-time phase threat wipe** |
-| **HealthPct** | HP% threshold to trigger | `100.0` (entire fight), `50.0` (only when HP $\le 50\%$) |
+| **HealthPct** | HP% threshold to trigger | `100.0` (entire fight), `50.0` (only when HP% is 50%) |
 | **SwitchToRandom** | Target switch behavior | `1` = Adds threat to a random alive player within 40 yds, `0` = Simply Reset boss threat |
 | **EmoteID** | Animation played on threat wipe | `15` = Battle Roar, `0` = None |
 
