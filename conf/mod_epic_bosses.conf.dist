@@ -16,7 +16,7 @@ EpicBosses.Auras.Enable = 1
 # - Jergosh (11518) : Shadowform (16567)
 # - Bazzalan (11519) : Green Poison Aura (33902)
 # - Taragaman (11520) : Intense Fire Aura (46231)
-EpicBosses.Auras = "11517 23511, 11518 16567, 11519 33902, 11520 46231"
+EpicBosses.Auras = ""
 
 # ==============================================================================
 # 2. AGGRO SOUNDS AND ROARS
@@ -29,7 +29,7 @@ EpicBosses.Sounds.Enable = 1
 # - Jergosh (11518) : Orc Warlock Shout (8316)
 # - Bazzalan (11519) : Satyr Laugh (8593)
 # - Taragaman (11520) : C'Thun Terrifying Laugh (8580)
-EpicBosses.Sounds = "11517 7136, 11518 8316, 11519 8593, 11520 8580"
+EpicBosses.Sounds = ""
 
 # ==============================================================================
 # 3. CAMERA SHAKES
@@ -38,7 +38,7 @@ EpicBosses.CameraShake.Enable = 1
 # Shakes the screen of players around the boss upon pulling (Aggro).
 # Format: "CreatureID ShakeType(1 to 65)" (65 = Heavy shake)
 # Ragefire Chasm Bosses:
-EpicBosses.CameraShake = "11517 65, 11518 64, 11519 63, 11520 65"
+EpicBosses.CameraShake = ""
 
 # ==============================================================================
 # 4. IN-COMBAT TRANSMOGRIFICATION (PHASE CHANGE)
@@ -51,7 +51,7 @@ EpicBosses.Transmog.Enable = 1
 # - Jergosh (11518) -> Voidwalker (4609) at 40% HP
 # - Bazzalan (11519) -> Shadow Satyr (18635) at 30% HP
 # - Taragaman (11520) -> Giant Doomguard (10469) at 50% HP
-EpicBosses.Transmog = "11517 50.0 14352, 11518 40.0 4609, 11519 30.0 18635, 11520 50.0 10469"
+EpicBosses.Transmog = ""
 
 # ==============================================================================
 # 5. TITLES AND ANNOUNCEMENT YELLS
@@ -60,7 +60,7 @@ EpicBosses.Yells.Enable = 1
 # The boss yells a red text phrase in the chat upon being attacked.
 # Format: "CreatureID|Text,CreatureID2|Text2" (Use | as separator)
 # Ragefire Chasm Bosses:
-EpicBosses.Yells = "11517|My cave! You should not have come!, 11518|The Burning Blade will consume this world!, 11519|The poison already flows through your veins..., 11520|I smell the delicious scent of your mortal souls..."
+EpicBosses.Yells = ""
 
 # ==============================================================================
 # 6. WEATHER MANIPULATION (SKYBOX)
@@ -70,4 +70,35 @@ EpicBosses.Weather.Enable = 1
 # NOTE: Weather only displays in outdoor instances (e.g., Zul'Gurub, AQ).
 # Format: "CreatureID WeatherType(1=Rain,2=Snow,3=Sandstorm) Intensity(0.1 to 1.0)"
 # Ragefire Chasm Bosses (Included for completeness):
-EpicBosses.Weather = "11517 3 1.0, 11518 1 1.0, 11519 1 0.5, 11520 2 1.0"
+EpicBosses.Weather = ""
+
+#--------------------------------------------------------------------------------------------------
+# 7. CUSTOM BOSS SPELLS & ANIMATIONS (Active combat abilities & emotes)
+# Format: "CreatureID SpellID IntervalMs HealthPct TargetType EmoteID Triggered, ..."
+#
+# IntervalMs : Cooldown in ms (e.g., 12000 = every 12s). Set to 0 for a one-time phase cast.
+# HealthPct  : Boss only casts when HP% <= HealthPct (100.0 = all fight, 30.0 = below 30% HP).
+# TargetType : 0 = Current Victim (Tank), 1 = Self, 2 = Random Player within 40 yds.
+# EmoteID    : 0 = Default spell animation, 15 = Roar, 18 = 2H Slam, 53 = Directed Cast, 54 = Omni Cast.
+# Triggered  : 0 = Normal cast (uses cast bar/native anim), 1 = Instant cast (great with EmoteID).
+#--------------------------------------------------------------------------------------------------
+#
+# Examples below for Ragefire Chasm bosses:
+# - 11517 (Oggleflint): War Stomp (16727) every 12s on victim with 2H Slam emote (18)
+# - 11518 (Jergosh): Shadow Bolt Volley (20741) every 10s with Omni Cast emote (54)
+# - 11519 (Bazzalan): Poison Bolt Volley (29293) every 15s below 75% HP with Directed Cast emote (53)
+# - 11520 (Taragaman): Charge (27577) random player every 14s (native anim 0) + Enrage (8599) once at 30% HP with Roar (15)
+#--------------------------------------------------------------------------------------------------
+EpicBosses.Spells = ""
+
+#--------------------------------------------------------------------------------------------------
+# 8. BOSS AGGRO / THREAT RESET (Wipes threat table & optionally switches to a random player)
+# Format: "CreatureID IntervalMs HealthPct SwitchToRandom EmoteID, ..."
+#
+# IntervalMs     : Cooldown in ms (e.g., 20000 = every 20s). Set to 0 for a one-time phase threat wipe.
+# HealthPct      : Boss only resets aggro when HP% <= HealthPct (e.g., 100.0 = all fight, 50.0 = below 50% HP).
+# SwitchToRandom : 1 = Immediately adds bonus threat to a random alive player within 40 yds so the boss switches target.
+#                  0 = Only zeroes out everyone's threat (ResetAllThreat()).
+# EmoteID        : Animation played when resetting aggro (e.g., 15 = Roar, 0 = None).
+#--------------------------------------------------------------------------------------------------
+EpicBosses.AggroReset = ""
