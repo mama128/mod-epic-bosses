@@ -7,7 +7,5 @@
 
 void Addmod_epic_bossesScripts()
 {
-    new Epic_Bosses_WorldScript();
-    new Epic_Bosses_CreatureScript();
-    new Epic_Bosses_UnitScript();
-} 
+    AddSC_mod_epic_bosses();
+}
