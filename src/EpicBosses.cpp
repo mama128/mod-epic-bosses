@@ -1,38 +1,14 @@
-/*
- * Copyright (C) 2016-2026 AzerothCore <http://www.azerothcore.org/>
- * Licensed under the AGPL v3 license.
- */
-
 #include "EpicBosses.hpp"
-#include <sstream>
-#include <map>
-#include <shared_mutex>
-#include <mutex>
-#include <atomic>
 #include "Opcodes.h"
-#include "Cell.h"
-#include "CellImpl.h"
+#include "Map.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
+#include "WorldPacket.h"
+#include "Random.h"
+#include <sstream>
 
-namespace
+namespace EpicBossConfig
 {
-    class EpicBossesBasicEvent : public BasicEvent
-    {
-    public:
-        EpicBossesBasicEvent(std::function<void()> callback) : _callback(std::move(callback)) {}
-        bool Execute(uint64, uint32) override { if (_callback) _callback(); return true; }
-        bool IsDeletable() const override { return true; } 
-    private:
-        std::function<void()> _callback;
-    };
-}
-
-namespace EpicBossesConfig
-{
-    std::atomic<bool> isConfigInit(false);
-    std::shared_mutex ConfigRWLock;
-
     bool Enable = true;
     bool AurasEnable = true;
     bool SoundsEnable = true;
@@ -40,257 +16,556 @@ namespace EpicBossesConfig
     bool TransmogEnable = true;
     bool YellsEnable = true;
     bool WeatherEnable = true;
+    bool SpellsEnable = true;
+    bool AggroResetEnable = true;
 
     std::map<uint32, uint32> Auras;
     std::map<uint32, uint32> Sounds;
     std::map<uint32, uint32> CameraShakes;
-    
-    struct TransmogData { float HealthPct; uint32 DisplayId; };
     std::map<uint32, TransmogData> Transmogs;
-    
-    struct WeatherData { uint32 Type; float Grade; };
-    std::map<uint32, WeatherData> Weathers;
-    
     std::map<uint32, std::string> Yells;
+    std::map<uint32, EpicBossWeatherData> Weathers;
+    std::map<uint32, std::vector<SpellData>> Spells;
+    std::map<uint32, std::vector<AggroResetData>> AggroResets;
+}
 
-    std::map<uint32, uint32> ParseUInt32Map(std::string const& str)
+static std::string TrimString(const std::string& str)
+{
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return "";
+    size_t last = str.find_last_not_of(" \t\r\n");
+    return str.substr(first, (last - first + 1));
+}
+
+static Player* SelectRandomAlivePlayer(Creature* creature, float range)
+{
+    std::vector<Player*> validTargets;
+    Map* map = creature->GetMap();
+    if (!map)
+        return nullptr;
+
+    auto const& players = map->GetPlayers();
+    for (auto itr = players.begin(); itr != players.end(); ++itr)
     {
-        std::map<uint32, uint32> result;
-        std::stringstream ss(str);
-        std::string item;
-        while (std::getline(ss, item, ','))
+        Player* player = itr->GetSource();
+        if (player && player->IsAlive() && !player->IsGameMaster() && creature->IsWithinDistInMap(player, range))
         {
-            std::stringstream ss2(item);
-            uint32 id, val;
-            if (ss2 >> id >> val) result[id] = val;
+            validTargets.push_back(player);
         }
-        return result;
     }
 
-    std::map<uint32, TransmogData> ParseTransmogMap(std::string const& str)
-    {
-        std::map<uint32, TransmogData> result;
-        std::stringstream ss(str);
-        std::string item;
-        while (std::getline(ss, item, ','))
-        {
-            std::stringstream ss2(item);
-            uint32 id, display;
-            float pct;
-            if (ss2 >> id >> pct >> display) result[id] = { pct, display };
-        }
-        return result;
-    }
+    if (!validTargets.empty())
+        return validTargets[urand(0, static_cast<uint32>(validTargets.size() - 1))];
 
-    std::map<uint32, WeatherData> ParseWeatherMap(std::string const& str)
-    {
-        std::map<uint32, WeatherData> result;
-        std::stringstream ss(str);
-        std::string item;
-        while (std::getline(ss, item, ','))
-        {
-            std::stringstream ss2(item);
-            uint32 id, type;
-            float grade;
-            if (ss2 >> id >> type >> grade) result[id] = { type, grade };
-        }
-        return result;
-    }
+    return nullptr;
+}
 
-    std::map<uint32, std::string> ParseYellsMap(std::string const& str)
+//--------------------------------------------------------------------------------------------------
+// Recursive Event: Phase Transmog Check
+//--------------------------------------------------------------------------------------------------
+class EpicBossTransmogEvent : public BasicEvent
+{
+public:
+    EpicBossTransmogEvent(Creature* creature) : _creature(creature) { }
+
+    bool Execute(uint64 /*e_time*/, uint32 /*p_time*/) override
     {
-        std::map<uint32, std::string> result;
-        std::stringstream ss(str);
-        std::string item;
-        while (std::getline(ss, item, ','))
+        if (!_creature || !_creature->IsAlive() || !EpicBossConfig::Enable || !EpicBossConfig::TransmogEnable)
+            return true;
+
+        auto it = EpicBossConfig::Transmogs.find(_creature->GetEntry());
+        if (it == EpicBossConfig::Transmogs.end())
+            return true;
+
+        const TransmogData& data = it->second;
+
+        if (_creature->IsInCombat() && _creature->GetHealthPct() <= data.HealthPct)
         {
-            size_t pos = item.find('|');
-            if (pos != std::string::npos)
+            if (_creature->GetDisplayId() != data.NewDisplayID)
             {
-                uint32 id = std::stoul(item.substr(0, pos));
-                std::string text = item.substr(pos + 1);
-                // Trim leading spaces
-                size_t start = text.find_first_not_of(" ");
-                if(start != std::string::npos) text = text.substr(start);
-                result[id] = text;
+                _creature->SetDisplayId(data.NewDisplayID);
+                _creature->CastSpell(_creature, 24085, true);
             }
         }
-        return result;
+        else if (!_creature->IsInCombat() && _creature->GetHealthPct() >= 99.0f)
+        {
+            if (_creature->GetDisplayId() != _creature->GetNativeDisplayId())
+                _creature->DeMorph();
+        }
+
+        _creature->m_Events.AddEvent(new EpicBossTransmogEvent(_creature), _creature->m_Events.CalculateTime(1000));
+        return true;
     }
 
-    void Load(bool reload)
+private:
+    Creature* _creature;
+};
+
+//--------------------------------------------------------------------------------------------------
+// Recursive Event: Custom Spells & Animations Check
+//--------------------------------------------------------------------------------------------------
+struct RuntimeTimerState
+{
+    uint32 CooldownRemainingMs = 0;
+    bool TriggeredOnce = false;
+};
+
+class EpicBossSpellEvent : public BasicEvent
+{
+public:
+    EpicBossSpellEvent(Creature* creature, const std::vector<RuntimeTimerState>& states)
+        : _creature(creature), _states(states) { }
+
+    bool Execute(uint64 /*e_time*/, uint32 /*p_time*/) override
     {
-        std::unique_lock<std::shared_mutex> lock(ConfigRWLock);
-        if (!reload && isConfigInit.load()) return;
+        if (!_creature || !_creature->IsAlive() || !EpicBossConfig::Enable || !EpicBossConfig::SpellsEnable)
+            return true;
 
-        Enable = sConfigMgr->GetOption<bool>("EpicBosses.Enable", true);
-        AurasEnable = sConfigMgr->GetOption<bool>("EpicBosses.Auras.Enable", true);
-        SoundsEnable = sConfigMgr->GetOption<bool>("EpicBosses.Sounds.Enable", true);
-        CameraShakeEnable = sConfigMgr->GetOption<bool>("EpicBosses.CameraShake.Enable", true);
-        TransmogEnable = sConfigMgr->GetOption<bool>("EpicBosses.Transmog.Enable", true);
-        YellsEnable = sConfigMgr->GetOption<bool>("EpicBosses.Yells.Enable", true);
-        WeatherEnable = sConfigMgr->GetOption<bool>("EpicBosses.Weather.Enable", true);
+        auto it = EpicBossConfig::Spells.find(_creature->GetEntry());
+        if (it == EpicBossConfig::Spells.end())
+            return true;
 
-        Auras = ParseUInt32Map(sConfigMgr->GetOption<std::string>("EpicBosses.Auras", ""));
-        Sounds = ParseUInt32Map(sConfigMgr->GetOption<std::string>("EpicBosses.Sounds", ""));
-        CameraShakes = ParseUInt32Map(sConfigMgr->GetOption<std::string>("EpicBosses.CameraShake", ""));
-        Transmogs = ParseTransmogMap(sConfigMgr->GetOption<std::string>("EpicBosses.Transmog", ""));
-        Weathers = ParseWeatherMap(sConfigMgr->GetOption<std::string>("EpicBosses.Weather", ""));
-        Yells = ParseYellsMap(sConfigMgr->GetOption<std::string>("EpicBosses.Yells", ""));
+        const std::vector<SpellData>& spellList = it->second;
+        if (_states.size() != spellList.size())
+            _states.assign(spellList.size(), RuntimeTimerState{});
 
-        isConfigInit.store(true);
-    }
-    
-    // Recursive function to monitor boss HP and trigger transmogrification
-    void ScheduleTransmogCheck(Creature* creature, float triggerPct, uint32 newDisplay)
-    {
-        creature->m_Events.AddEvent(new EpicBossesBasicEvent(
-            [creature, triggerPct, newDisplay]()
+        if (!_creature->IsInCombat())
+        {
+            for (size_t i = 0; i < spellList.size(); ++i)
             {
-                if (creature && creature->IsInWorld() && creature->IsAlive())
+                _states[i].TriggeredOnce = false;
+                _states[i].CooldownRemainingMs = (spellList[i].IntervalMs > 0) ? (spellList[i].IntervalMs / 2) : 0;
+            }
+
+            _creature->m_Events.AddEvent(new EpicBossSpellEvent(_creature, _states), _creature->m_Events.CalculateTime(1000));
+            return true;
+        }
+
+        for (size_t i = 0; i < spellList.size(); ++i)
+        {
+            const SpellData& spell = spellList[i];
+            RuntimeTimerState& state = _states[i];
+
+            if (state.CooldownRemainingMs > 1000)
+            {
+                state.CooldownRemainingMs -= 1000;
+                continue;
+            }
+            else
+            {
+                state.CooldownRemainingMs = 0;
+            }
+
+            if (spell.IntervalMs == 0 && state.TriggeredOnce)
+                continue;
+
+            if (_creature->GetHealthPct() > spell.HealthPct)
+                continue;
+
+            if (!spell.Triggered && _creature->HasUnitState(UNIT_STATE_CASTING))
+                continue;
+
+            Unit* target = nullptr;
+            if (spell.TargetType == 0)
+            {
+                target = _creature->GetVictim();
+            }
+            else if (spell.TargetType == 1)
+            {
+                target = _creature;
+            }
+            else if (spell.TargetType == 2)
+            {
+                target = SelectRandomAlivePlayer(_creature, 40.0f);
+                if (!target)
+                    target = _creature->GetVictim();
+            }
+
+            if (!target)
+                continue;
+
+            if (spell.EmoteID > 0)
+                _creature->HandleEmoteCommand(spell.EmoteID);
+
+            _creature->CastSpell(target, spell.SpellID, spell.Triggered);
+
+            if (spell.IntervalMs == 0)
+                state.TriggeredOnce = true;
+            else
+                state.CooldownRemainingMs = spell.IntervalMs;
+        }
+
+        _creature->m_Events.AddEvent(new EpicBossSpellEvent(_creature, _states), _creature->m_Events.CalculateTime(1000));
+        return true;
+    }
+
+private:
+    Creature* _creature;
+    std::vector<RuntimeTimerState> _states;
+};
+
+//--------------------------------------------------------------------------------------------------
+// Recursive Event: Boss Aggro / Threat Reset Check
+//--------------------------------------------------------------------------------------------------
+class EpicBossAggroResetEvent : public BasicEvent
+{
+public:
+    EpicBossAggroResetEvent(Creature* creature, const std::vector<RuntimeTimerState>& states)
+        : _creature(creature), _states(states) { }
+
+    bool Execute(uint64 /*e_time*/, uint32 /*p_time*/) override
+    {
+        if (!_creature || !_creature->IsAlive() || !EpicBossConfig::Enable || !EpicBossConfig::AggroResetEnable)
+            return true;
+
+        auto it = EpicBossConfig::AggroResets.find(_creature->GetEntry());
+        if (it == EpicBossConfig::AggroResets.end())
+            return true;
+
+        const std::vector<AggroResetData>& resetList = it->second;
+        if (_states.size() != resetList.size())
+            _states.assign(resetList.size(), RuntimeTimerState{});
+
+        if (!_creature->IsInCombat())
+        {
+            for (size_t i = 0; i < resetList.size(); ++i)
+            {
+                _states[i].TriggeredOnce = false;
+                _states[i].CooldownRemainingMs = resetList[i].IntervalMs;
+            }
+
+            _creature->m_Events.AddEvent(new EpicBossAggroResetEvent(_creature, _states), _creature->m_Events.CalculateTime(1000));
+            return true;
+        }
+
+        for (size_t i = 0; i < resetList.size(); ++i)
+        {
+            const AggroResetData& data = resetList[i];
+            RuntimeTimerState& state = _states[i];
+
+            if (state.CooldownRemainingMs > 1000)
+            {
+                state.CooldownRemainingMs -= 1000;
+                continue;
+            }
+            else
+            {
+                state.CooldownRemainingMs = 0;
+            }
+
+            if (data.IntervalMs == 0 && state.TriggeredOnce)
+                continue;
+
+            if (_creature->GetHealthPct() > data.HealthPct)
+                continue;
+
+            _creature->GetThreatMgr().ResetAllThreat();
+
+            if (data.EmoteID > 0)
+                _creature->HandleEmoteCommand(data.EmoteID);
+
+            if (data.SwitchToRandom)
+            {
+                if (Player* randomPlayer = SelectRandomAlivePlayer(_creature, 40.0f))
                 {
-                    if (creature->GetHealthPct() <= triggerPct)
-                    {
-                        if (creature->GetDisplayId() != newDisplay)
-                        {
-                            creature->SetDisplayId(newDisplay);
-                            // Adds a visual smoke/explosion effect during transformation
-                            creature->CastSpell(creature, 64446, true); 
-                        }
-                    }
-                    else
-                    {
-                        // If the boss hasn't reached the HP threshold yet, check again in 1 second
-                        ScheduleTransmogCheck(creature, triggerPct, newDisplay);
-                    }
+                    _creature->GetThreatMgr().AddThreat(randomPlayer, 1000.0f);
+                    if (_creature->AI())
+                        _creature->AI()->AttackStart(randomPlayer);
                 }
             }
-        ), creature->m_Events.CalculateTime(1000));
+
+            if (data.IntervalMs == 0)
+                state.TriggeredOnce = true;
+            else
+                state.CooldownRemainingMs = data.IntervalMs;
+        }
+
+        _creature->m_Events.AddEvent(new EpicBossAggroResetEvent(_creature, _states), _creature->m_Events.CalculateTime(1000));
+        return true;
+    }
+
+private:
+    Creature* _creature;
+    std::vector<RuntimeTimerState> _states;
+};
+
+//--------------------------------------------------------------------------------------------------
+// WorldScript: Configuration Loader
+//--------------------------------------------------------------------------------------------------
+void Epic_Bosses_WorldScript::OnAfterConfigLoad(bool /*reload*/)
+{
+    EpicBossConfig::Enable            = sConfigMgr->GetOption<bool>("EpicBosses.Enable", true);
+    EpicBossConfig::AurasEnable       = sConfigMgr->GetOption<bool>("EpicBosses.Auras.Enable", true);
+    EpicBossConfig::SoundsEnable      = sConfigMgr->GetOption<bool>("EpicBosses.Sounds.Enable", true);
+    EpicBossConfig::CameraShakeEnable = sConfigMgr->GetOption<bool>("EpicBosses.CameraShake.Enable", true);
+    EpicBossConfig::TransmogEnable    = sConfigMgr->GetOption<bool>("EpicBosses.Transmog.Enable", true);
+    EpicBossConfig::YellsEnable       = sConfigMgr->GetOption<bool>("EpicBosses.Yells.Enable", true);
+    EpicBossConfig::WeatherEnable     = sConfigMgr->GetOption<bool>("EpicBosses.Weather.Enable", true);
+    EpicBossConfig::SpellsEnable      = sConfigMgr->GetOption<bool>("EpicBosses.Spells.Enable", true);
+    EpicBossConfig::AggroResetEnable  = sConfigMgr->GetOption<bool>("EpicBosses.AggroReset.Enable", true);
+
+    EpicBossConfig::Auras.clear();
+    EpicBossConfig::Sounds.clear();
+    EpicBossConfig::CameraShakes.clear();
+    EpicBossConfig::Transmogs.clear();
+    EpicBossConfig::Yells.clear();
+    EpicBossConfig::Weathers.clear();
+    EpicBossConfig::Spells.clear();
+    EpicBossConfig::AggroResets.clear();
+
+    // 1. Parse Auras
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.Auras", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::stringstream itemStream(TrimString(item));
+            uint32 entry = 0, spellId = 0;
+            if (itemStream >> entry >> spellId)
+                EpicBossConfig::Auras[entry] = spellId;
+        }
+    }
+
+    // 2. Parse Sounds
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.Sounds", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::stringstream itemStream(TrimString(item));
+            uint32 entry = 0, soundId = 0;
+            if (itemStream >> entry >> soundId)
+                EpicBossConfig::Sounds[entry] = soundId;
+        }
+    }
+
+    // 3. Parse Camera Shake
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.CameraShake", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::stringstream itemStream(TrimString(item));
+            uint32 entry = 0, shakeId = 0;
+            if (itemStream >> entry >> shakeId)
+                EpicBossConfig::CameraShakes[entry] = shakeId;
+        }
+    }
+
+    // 4. Parse Transmog
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.Transmog", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::stringstream itemStream(TrimString(item));
+            uint32 entry = 0, displayId = 0;
+            float healthPct = 0.0f;
+            if (itemStream >> entry >> healthPct >> displayId)
+                EpicBossConfig::Transmogs[entry] = TransmogData{ healthPct, displayId };
+        }
+    }
+
+    // 5. Parse Yells
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.Yells", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::string trimmed = TrimString(item);
+            size_t pipePos = trimmed.find('|');
+            if (pipePos != std::string::npos)
+            {
+                uint32 entry = static_cast<uint32>(std::stoul(TrimString(trimmed.substr(0, pipePos))));
+                std::string text = TrimString(trimmed.substr(pipePos + 1));
+                if (entry > 0 && !text.empty())
+                    EpicBossConfig::Yells[entry] = text;
+            }
+        }
+    }
+
+    // 6. Parse Weather
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.Weather", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::stringstream itemStream(TrimString(item));
+            uint32 entry = 0, type = 0;
+            float grade = 0.0f;
+            if (itemStream >> entry >> type >> grade)
+                EpicBossConfig::Weathers[entry] = EpicBossWeatherData{ type, grade };
+        }
+    }
+
+    // 7. Parse Custom Boss Spells & Animations
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.Spells", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::stringstream itemStream(TrimString(item));
+            uint32 entry = 0, spellId = 0, intervalMs = 0, targetType = 0, emoteId = 0, triggeredInt = 1;
+            float healthPct = 100.0f;
+            if (itemStream >> entry >> spellId >> intervalMs >> healthPct >> targetType >> emoteId >> triggeredInt)
+            {
+                SpellData data;
+                data.SpellID    = spellId;
+                data.IntervalMs = intervalMs;
+                data.HealthPct  = healthPct;
+                data.TargetType = targetType;
+                data.EmoteID    = emoteId;
+                data.Triggered  = (triggeredInt != 0);
+
+                EpicBossConfig::Spells[entry].push_back(data);
+            }
+        }
+    }
+
+    // 8. Parse Boss Aggro / Threat Reset
+    {
+        std::string str = sConfigMgr->GetOption<std::string>("EpicBosses.AggroReset", "");
+        std::stringstream ss(str);
+        std::string item;
+        while (std::getline(ss, item, ','))
+        {
+            std::stringstream itemStream(TrimString(item));
+            uint32 entry = 0, intervalMs = 0, switchRandomInt = 1, emoteId = 0;
+            float healthPct = 100.0f;
+            if (itemStream >> entry >> intervalMs >> healthPct >> switchRandomInt >> emoteId)
+            {
+                AggroResetData data;
+                data.IntervalMs     = intervalMs;
+                data.HealthPct      = healthPct;
+                data.SwitchToRandom = (switchRandomInt != 0);
+                data.EmoteID        = emoteId;
+
+                EpicBossConfig::AggroResets[entry].push_back(data);
+            }
+        }
     }
 }
 
-// ---------------------------------------------------------
-// World Script (Configuration Loading)
-// ---------------------------------------------------------
-Epic_Bosses_WorldScript::Epic_Bosses_WorldScript() : WorldScript("Epic_Bosses_WorldScript") { }
-void Epic_Bosses_WorldScript::OnBeforeConfigLoad(bool /*reload*/) { EpicBossesConfig::isConfigInit.store(false); }
-void Epic_Bosses_WorldScript::OnAfterConfigLoad(bool reload) { EpicBossesConfig::Load(reload); }
-
-// ---------------------------------------------------------
-// Creature Script (Spawn Effects)
-// ---------------------------------------------------------
-Epic_Bosses_CreatureScript::Epic_Bosses_CreatureScript() : AllCreatureScript("Epic_Bosses_CreatureScript") { }
-
+//--------------------------------------------------------------------------------------------------
+// CreatureScript: Spawn Hooks
+//--------------------------------------------------------------------------------------------------
 void Epic_Bosses_CreatureScript::OnCreatureAddWorld(Creature* creature)
 {
-    if (!creature) return;
-    
-    std::shared_lock<std::shared_mutex> lock(EpicBossesConfig::ConfigRWLock);
-    if (!EpicBossesConfig::Enable) return;
+    if (!EpicBossConfig::Enable || !creature)
+        return;
+
     uint32 entry = creature->GetEntry();
-    
-    // 1. Cosmetic Auras
-    if (EpicBossesConfig::AurasEnable)
+
+    if (EpicBossConfig::AurasEnable)
     {
-        auto itAura = EpicBossesConfig::Auras.find(entry);
-        if (itAura != EpicBossesConfig::Auras.end())
+        auto it = EpicBossConfig::Auras.find(entry);
+        if (it != EpicBossConfig::Auras.end())
+            creature->CastSpell(creature, it->second, true);
+    }
+
+    if (EpicBossConfig::TransmogEnable && EpicBossConfig::Transmogs.find(entry) != EpicBossConfig::Transmogs.end())
+    {
+        creature->m_Events.AddEvent(new EpicBossTransmogEvent(creature), creature->m_Events.CalculateTime(1000));
+    }
+
+    if (EpicBossConfig::SpellsEnable)
+    {
+        auto it = EpicBossConfig::Spells.find(entry);
+        if (it != EpicBossConfig::Spells.end())
         {
-            creature->CastSpell(creature, itAura->second, true); 
+            std::vector<RuntimeTimerState> initialStates(it->second.size());
+            creature->m_Events.AddEvent(new EpicBossSpellEvent(creature, initialStates), creature->m_Events.CalculateTime(1000));
         }
     }
 
-    // 2. Transmog Check Setup
-    if (EpicBossesConfig::TransmogEnable)
+    if (EpicBossConfig::AggroResetEnable)
     {
-        auto itTrans = EpicBossesConfig::Transmogs.find(entry);
-        if (itTrans != EpicBossesConfig::Transmogs.end())
+        auto it = EpicBossConfig::AggroResets.find(entry);
+        if (it != EpicBossConfig::AggroResets.end())
         {
-            EpicBossesConfig::ScheduleTransmogCheck(creature, itTrans->second.HealthPct, itTrans->second.DisplayId);
+            std::vector<RuntimeTimerState> initialStates(it->second.size());
+            creature->m_Events.AddEvent(new EpicBossAggroResetEvent(creature, initialStates), creature->m_Events.CalculateTime(1000));
         }
     }
 }
 
-// ---------------------------------------------------------
-// Unit Script (Combat Effects: Sounds, Shakes, Weather, Yells)
-// ---------------------------------------------------------
-Epic_Bosses_UnitScript::Epic_Bosses_UnitScript() : UnitScript("Epic_Bosses_UnitScript") { }
-
+//--------------------------------------------------------------------------------------------------
+// UnitScript: Combat Engagement Hooks
+//--------------------------------------------------------------------------------------------------
 void Epic_Bosses_UnitScript::OnUnitEnterCombat(Unit* unit, Unit* /*victim*/)
 {
-    if (!unit) return;
-    Creature* creature = unit->ToCreature();
-    if (!creature) return;
+    if (!EpicBossConfig::Enable || !unit)
+        return;
 
-    std::shared_lock<std::shared_mutex> lock(EpicBossesConfig::ConfigRWLock);
-    if (!EpicBossesConfig::Enable) return;
+    Creature* creature = unit->ToCreature();
+    if (!creature)
+        return;
+
     uint32 entry = creature->GetEntry();
 
-    // 3. Aggro Sounds
-    if (EpicBossesConfig::SoundsEnable)
+    if (EpicBossConfig::SoundsEnable)
     {
-        auto itSound = EpicBossesConfig::Sounds.find(entry);
-        if (itSound != EpicBossesConfig::Sounds.end())
-        {
-            creature->PlayDistanceSound(itSound->second);
-        }
+        auto it = EpicBossConfig::Sounds.find(entry);
+        if (it != EpicBossConfig::Sounds.end())
+            creature->PlayDirectSound(it->second);
     }
 
-    // 4. Announcement Yells
-    if (EpicBossesConfig::YellsEnable)
+    if (EpicBossConfig::YellsEnable)
     {
-        auto itYell = EpicBossesConfig::Yells.find(entry);
-        if (itYell != EpicBossesConfig::Yells.end())
-        {
-            creature->Yell(itYell->second, LANG_UNIVERSAL, nullptr);
-        }
+        auto it = EpicBossConfig::Yells.find(entry);
+        if (it != EpicBossConfig::Yells.end())
+            creature->Yell(it->second, LANG_UNIVERSAL);
     }
 
-    // 5. Camera Shakes
-    if (EpicBossesConfig::CameraShakeEnable)
-    {
-        auto itShake = EpicBossesConfig::CameraShakes.find(entry);
-        if (itShake != EpicBossesConfig::CameraShakes.end())
-        {
-            float radius = 100.0f;
-            std::list<Player*> players;
-            Acore::AnyPlayerInObjectRangeCheck check(creature, radius);
-            Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(creature, players, check);
-            
-            Cell::VisitObjects(creature, searcher, radius);
+    bool hasShake   = EpicBossConfig::CameraShakeEnable && (EpicBossConfig::CameraShakes.find(entry) != EpicBossConfig::CameraShakes.end());
+    bool hasWeather = EpicBossConfig::WeatherEnable && (EpicBossConfig::Weathers.find(entry) != EpicBossConfig::Weathers.end());
 
-            for (Player* p : players)
+    if (hasShake || hasWeather)
+    {
+        Map* map = creature->GetMap();
+        if (map)
+        {
+            auto const& players = map->GetPlayers();
+            for (auto itr = players.begin(); itr != players.end(); ++itr)
             {
-                WorldPacket data(SMSG_CAMERA_SHAKE, 8);
-                data << uint32(itShake->second); // Shake ID
-                data << uint32(0);
-                p->GetSession()->SendPacket(&data);
+                Player* player = itr->GetSource();
+                if (!player || !player->GetSession() || !creature->IsWithinDistInMap(player, 100.0f))
+                    continue;
+
+                if (hasShake)
+                {
+                    uint32 shakeId = EpicBossConfig::CameraShakes[entry];
+                    WorldPacket data(SMSG_CAMERA_SHAKE, 8);
+                    data << uint32(shakeId);
+                    data << uint32(0);
+                    player->GetSession()->SendPacket(&data);
+                }
+
+                if (hasWeather)
+                {
+                    const EpicBossWeatherData& weather = EpicBossConfig::Weathers[entry];
+                    WorldPacket data(SMSG_WEATHER, 9);
+                    data << uint32(weather.Type);
+                    data << float(weather.Grade);
+                    data << uint8(0);
+                    player->GetSession()->SendPacket(&data);
+                }
             }
         }
     }
+}
 
-    // 6. Weather Manipulation (Bypass direct vers le client)
-    if (EpicBossesConfig::WeatherEnable)
-    {
-        auto itWeather = EpicBossesConfig::Weathers.find(entry);
-        if (itWeather != EpicBossesConfig::Weathers.end())
-        {
-            float radius = 150.0f;
-            std::list<Player*> players;
-            Acore::AnyPlayerInObjectRangeCheck check(creature, radius);
-            Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(creature, players, check);
-            
-            Cell::VisitObjects(creature, searcher, radius);
-
-            for (Player* p : players)
-            {
-                // Envoi manuel du paquet météo (SMSG_WEATHER)
-                // Évite de passer par WeatherMgr et affecte uniquement les joueurs du boss
-                WorldPacket data(SMSG_WEATHER, 9);
-                data << uint32(itWeather->second.Type);  // 0=Fine, 1=Rain, 2=Snow, 3=Sandstorm
-                data << float(itWeather->second.Grade);  // Intensité (0.1 à 1.0)
-                data << uint8(0);                        // Changement instantané (0)
-                p->GetSession()->SendPacket(&data);
-            }
-        }
-    }
+void AddSC_mod_epic_bosses()
+{
+    new Epic_Bosses_WorldScript();
+    new Epic_Bosses_CreatureScript();
+    new Epic_Bosses_UnitScript();
 }
