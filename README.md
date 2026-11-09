@@ -3,7 +3,7 @@
 
 **`mod-epic-bosses`** is a C++ module for **AzerothCore 3.3.5a (Wrath of the Lich King)** designed to enhance both immersion ("Game Feel") and combat strategies during boss or mob encounters.
 
-Entirely driven by its configuration file (requiring no recompilation or database edits), this module allows you to attach visual, audio, and atmospheric effects—as well as **custom spells, synchronized physical animations, and threat/aggro resets**—to any creature (`EntryID`) upon spawning, entering combat, or reaching specific health thresholds. 
+Entirely driven by its configuration file (requiring no recompilation or database edits), this module allows you to attach visual, audio, and atmospheric effects as well as **custom spells, synchronized physical animations, and threat/aggro resets** to any creature (`EntryID`) upon spawning, entering combat, or reaching specific health thresholds. 
 
 **For Level/Stats Scaling see** https://github.com/mama128/mod-global-scaling
 
