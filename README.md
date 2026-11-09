@@ -3,23 +3,23 @@
 
 **`mod-epic-bosses`** is a C++ module for **AzerothCore 3.3.5a (Wrath of the Lich King)** designed to enhance both immersion ("Game Feel") and combat strategies during boss or mob encounters.
 
-Entirely driven by its configuration file (requiring no recompilation or database edits), this module allows you to attach visual, audio, and atmospheric effects as well as **custom spells, synchronized physical animations, and threat/aggro resets** to any creature (`EntryID`) upon spawning, entering combat, or reaching specific health thresholds. 
+Entirely driven by its configuration file (requiring no recompilation or database edits), this module allows you to attach visual, audio, and atmospheric effects as well as **custom spells, synchronized physical animations, threat/aggro resets, and standardized TBC/WotLK boss immunities for Vanilla bosses** to any creature (`EntryID`) upon spawning, entering combat, or reaching specific health thresholds.
 
-**For Level/Stats Scaling see** https://github.com/mama128/mod-global-scaling
+**For Level/Stats Scaling see:** https://github.com/mama128/mod-global-scaling
 
 ---
 
 ## 🛡️ 100% Non-Intrusive & Safe Architecture
 
-- **Zero Database or DBC Modifications:** Nothing is ever written to or altered in your `acore_world` database (`creature_template`, `smart_scripts`, etc.) or client `.dbc` files. All mechanics and visual enhancements run purely in server memory (RAM) via AzerothCore C++ hooks, alongside existing SmartAI or C++ boss scripts.
-- **Full Reversibility:** If you disable the module or remove a creature's `EntryID` from the `.conf` file, the creature immediately reverts to its default Blizzlike behavior.
-- **Live Hot-Reloading (`.reload config`):** You can add, tweak, or disable spells, timers, and effects live in-game without restarting the `worldserver`.
+- **Zero Database or DBC Modifications:** Nothing is ever written to or altered in your `acore_world` database (`creature_template`, `smart_scripts`, etc.) or client `.dbc` files. All mechanics, immunities, and visual enhancements run purely in server memory (RAM) via AzerothCore C++ hooks, alongside existing SmartAI or C++ boss scripts.
+- **Full Reversibility:** If you disable the module or remove a creature's `EntryID` from the `.conf` file, the creature immediately reverts to its default Blizzlike behavior (preserving any native `MechanicImmuneMask` from the database).
+- **Live Hot-Reloading (`.reload config`):** You can add, tweak, or disable spells, timers, effects, and boss immunity exclusions live in-game without restarting the `worldserver`.
 
 ---
 
 ## ✨ Key Features
 
-The module features **8 independent systems** that can be individually enabled, disabled, and customized in the `.conf` file:
+The module features **9 independent systems** that can be individually enabled, disabled, and customized in the `.conf` file:
 
 ### 1. Spawn Cosmetic Auras (`EpicBosses.Auras`)
 Automatically applies a purely visual spell aura (`SpellID`) to the boss as soon as it spawns into the world (`OnCreatureAddWorld`).
@@ -74,14 +74,29 @@ Wipes the boss's threat table (`ResetAllThreat()`) on a repeating timer or as a 
 | **CreatureID** | Creature Entry ID | e.g., `11520` |
 | **IntervalMs** | Cooldown timer in milliseconds | e.g., `20000` (every 20s), or `0` for a **one-time phase threat wipe** |
 | **HealthPct** | HP% threshold to trigger | `100.0` (entire fight), `50.0` (only when HP% is 50%) |
-| **SwitchToRandom** | Target switch behavior | `1` = Adds threat to a random alive player within 40 yds, `0` = Simply Reset boss threat |
+| **SwitchToRandom** | Target switch behavior | `1` = Adds threat to a random alive player within 40 yds, `0` = Simply reset boss threat |
 | **EmoteID** | Animation played on threat wipe | `15` = Battle Roar, `0` = None |
+
+### 9. Vanilla Boss Immunities — TBC / WotLK Standardization (`EpicBosses.Immunities`)
+In Classic/Vanilla (`expansion == 0`), many dungeon bosses, rare elites, and even some raid bosses lack standardized `MechanicImmuneMask` flags in the database, allowing players (especially on scaled level 80 servers) to trivialize encounters via stuns, kiting, disarms, or hard crowd control.
+
+This system automatically upgrades **Vanilla Dungeon Bosses, Raid Bosses, World Bosses, Rare Elites (`rank == 2`), and custom `ForceBossCreatures`** to match TBC/WotLK boss immunity standards (while automatically ignoring normal/elite trash adds, friendly NPCs, player pets, and triggers):
+
+| Category Toggle | Blocked Mechanics / Effects |
+| :--- | :--- |
+| **`Vanilla.Stun`** | All Stun mechanics and auras (*Hammer of Justice*, *Cheap Shot*, *Kidney Shot*, *Deep Freeze*, *Intercept*, etc.). |
+| **`Vanilla.SilenceInterrupt`** | All Silence & Interrupt / Decast effects (*Kick*, *Counterspell*, *Pummel*, *Mind Freeze*, *Wind Shear*, *Silence*, *Gag Order*, etc.). |
+| **`Vanilla.CrowdControl`** | All Hard Crowd Control (*Polymorph*, *Hex*, *Fear*, *Charm/Mind Control*, *Sleep*, *Banish*, *Cyclone*, *Shackle Undead*, *Turn Evil*, *Sap*, *Gouge*, *Repentance*, *Blind*, *Horror/Death Coil*, *Freeze*). |
+| **`Vanilla.Movement`** | All Root, Snare, and Kiting mechanics (*Frost Nova*, *Entangling Roots*, *Movement Speed Slows*, *Chains of Ice*, *Death Grip*, and *Knockbacks* like *Typhoon*/*Thunderstorm*). **Does NOT block tank melee attack-speed debuffs** (*Thunder Clap*, *Icy Touch*, *Infected Wounds*). |
+| **`Vanilla.Disarm`** | All Main-Hand, Off-Hand, and Ranged/Shield Disarms (*Warrior Disarm*, *Rogue Dismantle*, *Psychic Horror Disarm*, *Chimera Shot - Scorpid*). |
+
+- **Pre-Configured Encounter Exclusions:** Includes out-of-the-box exclusion lists (`ExcludedCreatures`, `ExcludedStunCreatures`, `ExcludedSilenceInterruptCreatures`, `ExcludedCrowdControlCreatures`, `ExcludedMovementCreatures`, `ExcludedDisarmCreatures`) for Vanilla bosses whose official strategies require kicking heals/lethal casts, stunning, kiting, or disarming (such as *Kel'Thuzad*, *Prophet Skeram*, *Princess Yauj*, *High Inquisitor Whitemane*, *Princess Moira*, *Gluth*, *Herod*, etc.).
 
 ---
 
 ## ⚙️ Configuration Example
 
-Below is a full example setup for **Ragefire Chasm** bosses (`Oggleflint 11517`, `Jergosh 11518`, `Bazzalan 11519`, `Taragaman 11520`):
+Below is a full example setup for **Ragefire Chasm** bosses (`Oggleflint 11517`, `Jergosh 11518`, `Bazzalan 11519`, `Taragaman 11520`) along with the **Vanilla Boss Immunities** configuration:
 
 ```ini
 [worldserver]
@@ -121,35 +136,48 @@ EpicBosses.Spells = "11517 16727 12000 100.0 0 18 1, 11518 20741 10000 100.0 0 5
 EpicBosses.AggroReset.Enable = 1
 EpicBosses.AggroReset = "11520 20000 100.0 1 15"
 
+# 9. Vanilla Boss Immunities (TBC / WotLK Standardization)
+EpicBosses.Immunities.Enable = 1
+EpicBosses.Immunities.Vanilla.Stun = 1
+EpicBosses.Immunities.Vanilla.SilenceInterrupt = 1
+EpicBosses.Immunities.Vanilla.CrowdControl = 1
+EpicBosses.Immunities.Vanilla.Movement = 1
+EpicBosses.Immunities.Vanilla.Disarm = 1
+EpicBosses.Immunities.ForceBossCreatures = "7023,7274,7359,7603,7604,7605,7606,7607,7608,7797,13233,13596,9025,9026,9031,9041,9042,9056,9033,11143,17307,17536"
+EpicBosses.Immunities.ExcludedCreatures = "15543,3673,3669,3670,3671"
+EpicBosses.Immunities.ExcludedStunCreatures = "10440,1853"
+EpicBosses.Immunities.ExcludedSilenceInterruptCreatures = "15990,15953,15954,16065,16064,16062,16063,15263,15516,15341,15340,14517,14507,14510,11380,12018,11988,12118,3977,3976,6487,4543,8929,9019,9017,9056,10811,10997,10438,10508,10503,10506,11486,11489,11492,9236,9736,7358,7271,7272,5721,5710,4275"
+EpicBosses.Immunities.ExcludedCrowdControlCreatures = ""
+EpicBosses.Immunities.ExcludedMovementCreatures = "15932,11583"
+EpicBosses.Immunities.ExcludedDisarmCreatures = "3975,9568,12017,10429,9583,10808"
+```
+
 ---
 
-🔄 Disabling or Modifying Features Live In-Game
+## 🔄 Disabling or Modifying Features Live In-Game
 
-You can disable the entire module or toggle specific mechanics at any time without restarting the server:
+You can disable the entire module, toggle specific mechanics, or add a boss to an immunity exclusion list at any time without restarting the server:
 
-    Open mod_epic_bosses.conf inside your server's configs/modules/ directory.
-
-    Set EpicBosses.Enable = 0 to turn off the entire module, or set any specific feature toggle to 0 (e.g., EpicBosses.Spells.Enable = 0 or EpicBosses.AggroReset.Enable = 0).
-
-    In-game, run the GM command:
-    Plaintext
-
-    .reload config
-
-    Immediate Effect: All active combat timers (spells, phase checks, aggro resets) check the configuration state every second and will stop immediately. If an already-spawned boss currently has a spawn aura or phase morph applied, targeting it and typing .respawn will reset its visual state back to normal.
+1. Open `mod_epic_bosses.conf` inside your server's `configs/modules/` directory.
+2. Set `EpicBosses.Enable = 0` to turn off the entire module, or set any specific feature toggle to `0` (e.g., `EpicBosses.Spells.Enable = 0` or `EpicBosses.Immunities.Enable = 0`).
+3. In-game, run the GM command:
+   ```text
+   .reload config
+   ```
+4. **Immediate Effect:**
+   - All active combat timers (spells, phase checks, aggro resets) check the configuration state every second and will stop immediately.
+   - **Boss Immunities** are automatically re-evaluated both on spawn (`OnCreatureAddWorld`) and as soon as a boss enters combat (`OnUnitEnterCombat`), meaning any exclusion added via `.reload config` takes effect on the very next pull without removing the boss's native database immunities.
+   - If an already-spawned boss currently has a spawn aura or phase morph applied, targeting it and typing `.respawn` will reset its visual state back to normal.
 
 ---
 
-🛠️ Installation & Usage
+## 🛠️ Installation & Usage
 
-    Clone or copy the mod-epic-bosses directory into your AzerothCore modules/ folder:
-    Bash
-
-    cd /path/to/azerothcore-wotlk/modules
-    git clone [https://github.com/mama128/mod-epic-bosses.git](https://github.com/mama128/mod-epic-bosses.git) mod-epic-bosses
-
-    Re-run CMake and compile your AzerothCore solution.
-
-    Copy conf/mod_epic_bosses.conf.dist into your server's configs/modules/ folder and rename it to mod_epic_bosses.conf.
-
-    Edit mod_epic_bosses.conf to customize your bosses and reload changes live in-game at any time using .reload config.
+1. Clone or copy the `mod-epic-bosses` directory into your AzerothCore `modules/` folder:
+   ```bash
+   cd /path/to/azerothcore-wotlk/modules
+   git clone https://github.com/mama128/mod-epic-bosses.git mod-epic-bosses
+   ```
+2. Re-run CMake and compile your AzerothCore solution.
+3. Copy `conf/mod_epic_bosses.conf.dist` into your server's `configs/modules/` folder and rename it to `mod_epic_bosses.conf`.
+4. Edit `mod_epic_bosses.conf` to customize your bosses and reload changes live in-game at any time using `.reload config`.
