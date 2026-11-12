@@ -3,7 +3,7 @@
 # ==============================================================================
 # EPIC BOSSES MODULE - Enhances "Game Feel" and immersion during boss fights.
 # ==============================================================================
-EpicBosses.Enable = 1
+EpicBosses.Enable = 0
 
 # ==============================================================================
 # 1. COSMETIC AURAS
@@ -76,6 +76,7 @@ EpicBosses.Weather = ""
 # 7. CUSTOM BOSS SPELLS & ANIMATIONS (Active combat abilities & emotes)
 # Format: "CreatureID SpellID IntervalMs HealthPct TargetType EmoteID Triggered, ..."
 #
+"EpicBosses.Spells.Enable = 0
 # IntervalMs : Cooldown in ms (e.g., 12000 = every 12s). Set to 0 for a one-time phase cast.
 # HealthPct  : Boss only casts when HP% <= HealthPct (100.0 = all fight, 30.0 = below 30% HP).
 # TargetType : 0 = Current Victim (Tank), 1 = Self, 2 = Random Player within 40 yds.
@@ -95,6 +96,7 @@ EpicBosses.Spells = ""
 # 8. BOSS AGGRO / THREAT RESET (Wipes threat table & optionally switches to a random player)
 # Format: "CreatureID IntervalMs HealthPct SwitchToRandom EmoteID, ..."
 #
+EpicBosses.AggroReset.Enable = 0
 # IntervalMs     : Cooldown in ms (e.g., 20000 = every 20s). Set to 0 for a one-time phase threat wipe.
 # HealthPct      : Boss only resets aggro when HP% <= HealthPct (e.g., 100.0 = all fight, 50.0 = below 50% HP).
 # SwitchToRandom : 1 = Immediately adds bonus threat to a random alive player within 40 yds so the boss switches target.
