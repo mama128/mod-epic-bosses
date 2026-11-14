@@ -3,7 +3,7 @@
 # ==============================================================================
 # EPIC BOSSES MODULE - Enhances "Game Feel" and immersion during boss fights.
 # ==============================================================================
-EpicBosses.Enable = 0
+EpicBosses.Enable = 1
 
 # ==============================================================================
 # 1. COSMETIC AURAS
@@ -153,7 +153,8 @@ EpicBosses.Immunities.ExcludedCreatures = "15543,3673,3669,3670,3671"
 # Bosses that must remain stunnable for specific encounter mechanics:
 # - 10440: Baron Rivendare (Stratholme - Stunned during skeleton phase / Cleave)
 # - 1853:  Darkmaster Gandling (Scholomance - Stunnable to prevent room teleports)
-EpicBosses.Immunities.ExcludedStunCreatures = "10440,1853"
+# - 15516: Battleguard Sartura (AQ40 - Stunnable outside Whirlwind)
+EpicBosses.Immunities.ExcludedStunCreatures = "10440,1853,15516"
 
 # ------------------------------------------------------------------------------
 # C. EXCLUDED FROM SILENCE / INTERRUPT (DECAST) IMMUNITY ONLY
@@ -175,12 +176,17 @@ EpicBosses.Immunities.ExcludedStunCreatures = "10440,1853"
 # - 14517: High Priestess Jeklik (Zul'Gurub - Great Heal & Mind Flay)
 # - 14507: High Priest Venoxis (Zul'Gurub - Renew & Holy Wrath)
 # - 14510: High Priestess Mar'li (Zul'Gurub - Drain Life & Poison Volley)
+# - 14509: High Priest Thekal (Zul'Gurub - Phase 1 Great Heal)
 # - 11380: Jin'do the Hexxer (Zul'Gurub - Hex & Brain Wash Totem casts)
 # - 12018: Majordomo Executus (Molten Core - Teleport & Aegis)
 # - 11988: Gehennas (Molten Core - Shadow Bolt / Rain of Fire)
 # - 12118: Lucifron (Molten Core - Impending Doom / Lucifron's Curse)
 #
-# [Vanilla Dungeons - BRD, LBRS, UBRS, Strat, Scholo, Dire Maul, SM, etc.]
+# [Vanilla Dungeons - RFC, BFD, Gnomeregan, SM, RFD, ZF, ST, BRD, LBRS, Strat, Scholo, DM]
+# - 11518: Jergosh the Invoker (Ragefire Chasm - Immolate & Curse of Weakness)
+# - 4831:  Lady Sarevess (Blackfathom Deeps - Forked Lightning)
+# - 4832:  Twilight Lord Kelris (Blackfathom Deeps - Mind Blast & Sleep)
+# - 7800:  Mekgineer Thermaplugg (Gnomeregan - Bomb activations)
 # - 3977:  High Inquisitor Whitemane (Scarlet Monastery - Scarlet Resurrection & Heal)
 # - 3976:  Scarlet Commander Mograine (Scarlet Monastery - Crusader Heal)
 # - 6487:  Arcanist Doan (Scarlet Monastery - Detonation / Silence)
@@ -192,6 +198,8 @@ EpicBosses.Immunities.ExcludedStunCreatures = "10440,1853"
 # - 10811: Archivist Galford (Stratholme - Burning Winds & Pyroblast)
 # - 10997: Cannon Master Willey (Stratholme - Summon Crimson Rifleman)
 # - 10438: Maleki the Pallid (Stratholme - Frostbolt & Drain Life)
+# - 10436: Baroness Anastari (Stratholme - Banshee Wail & Silence)
+# - 1853:  Darkmaster Gandling (Scholomance - Shadow Portal)
 # - 10508: Ras Frostwhisper (Scholomance - Frostbolt Volley & Fear)
 # - 10503: Jandice Barov (Scholomance - Curse of Blood)
 # - 10506: Kirtonos the Herald (Scholomance - Shadow Bolt Volley)
@@ -206,13 +214,14 @@ EpicBosses.Immunities.ExcludedStunCreatures = "10440,1853"
 # - 5721:  Dreamscythe (Sunken Temple - Acid Breath)
 # - 5710:  Jammal'an the Prophet (Sunken Temple - Healing Wave & Hex of Jammal'an)
 # - 4275:  Archmage Arugal (Shadowfang Keep - Void Bolt)
-EpicBosses.Immunities.ExcludedSilenceInterruptCreatures = "15990,15953,15954,16065,16064,16062,16063,15263,15516,15341,15340,14517,14507,14510,11380,12018,11988,12118,3977,3976,6487,4543,8929,9019,9017,9056,10811,10997,10438,10508,10503,10506,11486,11489,11492,9236,9736,7358,7271,7272,5721,5710,4275"
+EpicBosses.Immunities.ExcludedSilenceInterruptCreatures = "15990,15953,15954,16065,16064,16062,16063,15263,15516,15341,15340,14517,14507,14510,14509,11380,12018,11988,12118,11518,4831,4832,7800,3977,3976,6487,4543,8929,9019,9017,9056,10811,10997,10438,10436,1853,10508,10503,10506,11486,11489,11492,9236,9736,7358,7271,7272,5721,5710,4275"
 
 # ------------------------------------------------------------------------------
 # D. EXCLUDED FROM HARD CROWD CONTROL IMMUNITY ONLY
 # ------------------------------------------------------------------------------
-# Bosses or mini-bosses that must remain vulnerable to specific CC (e.g., Banish/Fear/Sheep):
-EpicBosses.Immunities.ExcludedCrowdControlCreatures = ""
+# Bosses or mini-bosses that must remain vulnerable to specific CC (e.g., Freeze/Banish/Charm):
+# - 15299: Viscidus (AQ40 - Must NOT be immune to MECHANIC_FREEZE to be frozen and shattered)
+EpicBosses.Immunities.ExcludedCrowdControlCreatures = "15299"
 
 # ------------------------------------------------------------------------------
 # E. EXCLUDED FROM MOVEMENT (ROOT / SNARE) IMMUNITY ONLY
@@ -220,7 +229,9 @@ EpicBosses.Immunities.ExcludedCrowdControlCreatures = ""
 # Bosses where kiting or slowing movement is an intended part of the encounter:
 # - 15932: Gluth (Naxxramas - Kiting / Decimate phase positioning)
 # - 11583: Razorgore the Untamed (BWL - Kiting / Conflagration positioning)
-EpicBosses.Immunities.ExcludedMovementCreatures = "15932,11583"
+# - 15339: Ossirian the Unscarred (AQ20 - Kited between crystal pylons)
+# - 10363: General Drakkisath (UBRS - Classic hunter kiting strategy)
+EpicBosses.Immunities.ExcludedMovementCreatures = "15932,11583,15339,10363"
 
 # ------------------------------------------------------------------------------
 # F. EXCLUDED FROM DISARM IMMUNITY ONLY
@@ -230,6 +241,8 @@ EpicBosses.Immunities.ExcludedMovementCreatures = "15932,11583"
 # - 9568:  Overlord Wyrmthalak (LBRS - Classic Disarm target)
 # - 12017: Broodlord Lashlayer (BWL - Vulnerable to Disarm to mitigate Mortal Strike)
 # - 10429: Warchief Rend Blackhand (UBRS - Vulnerable to Disarm)
-# - 9583:  General Drakkisath (UBRS - Conflagration tank swap / Disarm)
+# - 10363: General Drakkisath (UBRS - Conflagration tank swap / Disarm, fixed ID 10363)
 # - 10808: Timmy the Cruel (Stratholme - Enrage / Thrash counter-play)
-EpicBosses.Immunities.ExcludedDisarmCreatures = "3975,9568,12017,10429,9583,10808"
+# - 15516: Battleguard Sartura (AQ40 - Disarmable during Whirlwind)
+# - 11382: Bloodlord Mandokir (Zul'Gurub - Disarmable to mitigate Enrage/Mortal Strike)
+EpicBosses.Immunities.ExcludedDisarmCreatures = "3975,9568,12017,10429,10363,10808,15516,11382"		
