@@ -11,16 +11,21 @@
 #include "WorldPacket.h"
 #include "Random.h"
 #include "SpellDefines.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "SharedDefines.h"
 #include "DBCStores.h"
 #include <sstream>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <shared_mutex>
 #include <mutex>
 
 namespace EpicBossConfig
 {
+    std::shared_mutex ConfigMutex;
+
     bool Enable = true;
     bool AurasEnable = true;
     bool SoundsEnable = true;
@@ -67,6 +72,7 @@ namespace EpicBossConfig
 
     std::shared_mutex ImmunityCacheMutex;
     std::unordered_map<uint64, BossImmunityState> ImmunityCache;
+    std::unordered_set<uint64> ActiveEventCreatures;
 }
 
 static std::string TrimString(const std::string& str)
@@ -96,6 +102,25 @@ static std::set<uint32> ParseUInt32Set(const std::string& str)
         }
     }
     return result;
+}
+
+template <typename MapType>
+static typename MapType::const_iterator FindBossEntry(const MapType& mapData, Creature const* creature)
+{
+    if (!creature)
+        return mapData.end();
+
+    uint32 masterEntry = creature->GetEntry();
+    auto it = mapData.find(masterEntry);
+    if (it != mapData.end())
+        return it;
+
+    if (CreatureTemplate const* cInfo = creature->GetCreatureTemplate())
+    {
+        if (cInfo->Entry != masterEntry)
+            return mapData.find(cInfo->Entry);
+    }
+    return mapData.end();
 }
 
 static bool IsPlayerOwnedOrControlled(Unit const* unit)
@@ -152,6 +177,8 @@ static void ApplyOrUpdateVanillaBossImmunities(Creature* creature)
     CreatureTemplate const* cInfo = creature->GetCreatureTemplate();
     if (!cInfo)
         return;
+
+    std::shared_lock<std::shared_mutex> configLock(EpicBossConfig::ConfigMutex);
 
     uint64 guid = creature->GetGUID().GetRawValue();
     uint32 masterEntry = creature->GetEntry();
@@ -382,7 +409,10 @@ static Player* SelectRandomAlivePlayer(Creature* creature, float range)
     for (auto itr = players.begin(); itr != players.end(); ++itr)
     {
         Player* player = itr->GetSource();
-        if (player && player->IsAlive() && !player->IsGameMaster() && creature->IsWithinDistInMap(player, range))
+        // Ensure target is alive, in combat, hostile to the boss, and within Line of Sight (prevents pulling through walls/floors)
+        if (player && player->IsAlive() && !player->IsGameMaster() &&
+            player->IsInCombat() && creature->IsHostileTo(player) &&
+            creature->IsWithinDistInMap(player, range) && creature->IsWithinLOSInMap(player))
         {
             validTargets.push_back(player);
         }
@@ -404,10 +434,14 @@ public:
 
     bool Execute(uint64 /*e_time*/, uint32 /*p_time*/) override
     {
-        if (!_creature || !_creature->IsAlive() || !EpicBossConfig::Enable || !EpicBossConfig::TransmogEnable)
+        if (!_creature || !_creature->IsInWorld() || !_creature->IsAlive())
             return true;
 
-        auto it = EpicBossConfig::Transmogs.find(_creature->GetEntry());
+        std::shared_lock<std::shared_mutex> configLock(EpicBossConfig::ConfigMutex);
+        if (!EpicBossConfig::Enable || !EpicBossConfig::TransmogEnable)
+            return true;
+
+        auto it = FindBossEntry(EpicBossConfig::Transmogs, _creature);
         if (it == EpicBossConfig::Transmogs.end())
             return true;
 
@@ -452,10 +486,14 @@ public:
 
     bool Execute(uint64 /*e_time*/, uint32 /*p_time*/) override
     {
-        if (!_creature || !_creature->IsAlive() || !EpicBossConfig::Enable || !EpicBossConfig::SpellsEnable)
+        if (!_creature || !_creature->IsInWorld() || !_creature->IsAlive())
             return true;
 
-        auto it = EpicBossConfig::Spells.find(_creature->GetEntry());
+        std::shared_lock<std::shared_mutex> configLock(EpicBossConfig::ConfigMutex);
+        if (!EpicBossConfig::Enable || !EpicBossConfig::SpellsEnable)
+            return true;
+
+        auto it = FindBossEntry(EpicBossConfig::Spells, _creature);
         if (it == EpicBossConfig::Spells.end())
             return true;
 
@@ -499,6 +537,10 @@ public:
             if (!spell.Triggered && _creature->HasUnitState(UNIT_STATE_CASTING))
                 continue;
 
+            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spell.SpellID);
+            if (!spellInfo)
+                continue;
+
             Unit* target = nullptr;
             if (spell.TargetType == 0)
             {
@@ -515,7 +557,14 @@ public:
                     target = _creature->GetVictim();
             }
 
-            if (!target)
+            // Safety check: Never allow a boss to cast an offensive/negative spell on itself
+            // (e.g. if TargetType == 1 was misconfigured on an attack spell like Immolate)
+            if (target == _creature && !spellInfo->IsPositive())
+            {
+                target = _creature->GetVictim();
+            }
+
+            if (!target || (target == _creature && !spellInfo->IsPositive()))
                 continue;
 
             if (spell.EmoteID > 0)
@@ -549,10 +598,14 @@ public:
 
     bool Execute(uint64 /*e_time*/, uint32 /*p_time*/) override
     {
-        if (!_creature || !_creature->IsAlive() || !EpicBossConfig::Enable || !EpicBossConfig::AggroResetEnable)
+        if (!_creature || !_creature->IsInWorld() || !_creature->IsAlive())
             return true;
 
-        auto it = EpicBossConfig::AggroResets.find(_creature->GetEntry());
+        std::shared_lock<std::shared_mutex> configLock(EpicBossConfig::ConfigMutex);
+        if (!EpicBossConfig::Enable || !EpicBossConfig::AggroResetEnable)
+            return true;
+
+        auto it = FindBossEntry(EpicBossConfig::AggroResets, _creature);
         if (it == EpicBossConfig::AggroResets.end())
             return true;
 
@@ -628,6 +681,8 @@ private:
 //--------------------------------------------------------------------------------------------------
 void Epic_Bosses_WorldScript::OnAfterConfigLoad(bool /*reload*/)
 {
+    std::unique_lock<std::shared_mutex> configLock(EpicBossConfig::ConfigMutex);
+
     EpicBossConfig::Enable            = sConfigMgr->GetOption<bool>("EpicBosses.Enable", true);
     EpicBossConfig::AurasEnable       = sConfigMgr->GetOption<bool>("EpicBosses.Auras.Enable", true);
     EpicBossConfig::SoundsEnable      = sConfigMgr->GetOption<bool>("EpicBosses.Sounds.Enable", true);
@@ -833,26 +888,33 @@ void Epic_Bosses_CreatureScript::OnCreatureAddWorld(Creature* creature)
 
     ApplyOrUpdateVanillaBossImmunities(creature);
 
+    std::shared_lock<std::shared_mutex> configLock(EpicBossConfig::ConfigMutex);
     if (!EpicBossConfig::Enable)
         return;
 
-    uint32 entry = creature->GetEntry();
-
     if (EpicBossConfig::AurasEnable)
     {
-        auto it = EpicBossConfig::Auras.find(entry);
-        if (it != EpicBossConfig::Auras.end())
+        auto it = FindBossEntry(EpicBossConfig::Auras, creature);
+        if (it != EpicBossConfig::Auras.end() && !creature->HasAura(it->second))
             creature->CastSpell(creature, it->second, true);
     }
 
-    if (EpicBossConfig::TransmogEnable && EpicBossConfig::Transmogs.find(entry) != EpicBossConfig::Transmogs.end())
+    uint64 guid = creature->GetGUID().GetRawValue();
+    {
+        std::unique_lock<std::shared_mutex> lock(EpicBossConfig::ImmunityCacheMutex);
+        if (EpicBossConfig::ActiveEventCreatures.count(guid) > 0)
+            return;
+        EpicBossConfig::ActiveEventCreatures.insert(guid);
+    }
+
+    if (EpicBossConfig::TransmogEnable && FindBossEntry(EpicBossConfig::Transmogs, creature) != EpicBossConfig::Transmogs.end())
     {
         creature->m_Events.AddEvent(new EpicBossTransmogEvent(creature), creature->m_Events.CalculateTime(1000));
     }
 
     if (EpicBossConfig::SpellsEnable)
     {
-        auto it = EpicBossConfig::Spells.find(entry);
+        auto it = FindBossEntry(EpicBossConfig::Spells, creature);
         if (it != EpicBossConfig::Spells.end())
         {
             std::vector<RuntimeTimerState> initialStates(it->second.size());
@@ -862,7 +924,7 @@ void Epic_Bosses_CreatureScript::OnCreatureAddWorld(Creature* creature)
 
     if (EpicBossConfig::AggroResetEnable)
     {
-        auto it = EpicBossConfig::AggroResets.find(entry);
+        auto it = FindBossEntry(EpicBossConfig::AggroResets, creature);
         if (it != EpicBossConfig::AggroResets.end())
         {
             std::vector<RuntimeTimerState> initialStates(it->second.size());
@@ -879,6 +941,7 @@ void Epic_Bosses_CreatureScript::OnCreatureRemoveWorld(Creature* creature)
     uint64 guid = creature->GetGUID().GetRawValue();
     std::unique_lock<std::shared_mutex> lock(EpicBossConfig::ImmunityCacheMutex);
     EpicBossConfig::ImmunityCache.erase(guid);
+    EpicBossConfig::ActiveEventCreatures.erase(guid);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -896,27 +959,36 @@ void Epic_Bosses_UnitScript::OnUnitEnterCombat(Unit* unit, Unit* /*victim*/)
     // Re-verify immunities on combat pull (ensures live .reload config changes take effect immediately)
     ApplyOrUpdateVanillaBossImmunities(creature);
 
+    std::shared_lock<std::shared_mutex> configLock(EpicBossConfig::ConfigMutex);
     if (!EpicBossConfig::Enable)
         return;
 
-    uint32 entry = creature->GetEntry();
+    // Re-apply cosmetic aura on combat pull in case a previous wipe/Reset() cleared all auras
+    if (EpicBossConfig::AurasEnable)
+    {
+        auto itAura = FindBossEntry(EpicBossConfig::Auras, creature);
+        if (itAura != EpicBossConfig::Auras.end() && !creature->HasAura(itAura->second))
+            creature->CastSpell(creature, itAura->second, true);
+    }
 
     if (EpicBossConfig::SoundsEnable)
     {
-        auto it = EpicBossConfig::Sounds.find(entry);
+        auto it = FindBossEntry(EpicBossConfig::Sounds, creature);
         if (it != EpicBossConfig::Sounds.end())
             creature->PlayDirectSound(it->second);
     }
 
     if (EpicBossConfig::YellsEnable)
     {
-        auto it = EpicBossConfig::Yells.find(entry);
+        auto it = FindBossEntry(EpicBossConfig::Yells, creature);
         if (it != EpicBossConfig::Yells.end())
             creature->Yell(it->second, LANG_UNIVERSAL);
     }
 
-    bool hasShake   = EpicBossConfig::CameraShakeEnable && (EpicBossConfig::CameraShakes.find(entry) != EpicBossConfig::CameraShakes.end());
-    bool hasWeather = EpicBossConfig::WeatherEnable && (EpicBossConfig::Weathers.find(entry) != EpicBossConfig::Weathers.end());
+    auto itShake   = FindBossEntry(EpicBossConfig::CameraShakes, creature);
+    auto itWeather = FindBossEntry(EpicBossConfig::Weathers, creature);
+    bool hasShake   = EpicBossConfig::CameraShakeEnable && (itShake != EpicBossConfig::CameraShakes.end());
+    bool hasWeather = EpicBossConfig::WeatherEnable && (itWeather != EpicBossConfig::Weathers.end());
 
     if (hasShake || hasWeather)
     {
@@ -932,7 +1004,7 @@ void Epic_Bosses_UnitScript::OnUnitEnterCombat(Unit* unit, Unit* /*victim*/)
 
                 if (hasShake)
                 {
-                    uint32 shakeId = EpicBossConfig::CameraShakes[entry];
+                    uint32 shakeId = itShake->second;
                     WorldPacket data(SMSG_CAMERA_SHAKE, 8);
                     data << uint32(shakeId);
                     data << uint32(0);
@@ -941,7 +1013,7 @@ void Epic_Bosses_UnitScript::OnUnitEnterCombat(Unit* unit, Unit* /*victim*/)
 
                 if (hasWeather)
                 {
-                    const EpicBossWeatherData& weather = EpicBossConfig::Weathers[entry];
+                    const EpicBossWeatherData& weather = itWeather->second;
                     WorldPacket data(SMSG_WEATHER, 9);
                     data << uint32(weather.Type);
                     data << float(weather.Grade);
